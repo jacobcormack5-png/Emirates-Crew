@@ -87,14 +87,35 @@ function App() {
         window.history.replaceState({}, document.title, "/dashboard");
       }
     };
-    supabase.auth.getSession().then(({ data }) => finishSignIn(data.session));
+    let restoring = true;
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, nextSession) => {
-      finishSignIn(nextSession);
+      if (nextSession || !restoring) finishSignIn(nextSession);
       if (event === "SIGNED_IN")
         window.scrollTo({ top: 0, behavior: "instant" });
     });
+    const restoreSession = async () => {
+      const { data: current } = await supabase.auth.getSession();
+      if (current.session) {
+        restoring = false;
+        return finishSignIn(current.session);
+      }
+
+      const code = new URLSearchParams(window.location.search).get("code");
+      if (window.location.pathname === "/auth/callback" && code) {
+        const { data, error } =
+          await supabase.auth.exchangeCodeForSession(code);
+        if (!error && data.session) {
+          restoring = false;
+          return finishSignIn(data.session);
+        }
+        console.error("Discord sign-in callback failed", error);
+      }
+      restoring = false;
+      finishSignIn(null);
+    };
+    restoreSession();
     return () => subscription.unsubscribe();
   }, []);
 
