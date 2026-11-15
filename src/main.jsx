@@ -30,6 +30,8 @@ import {
   XCircle,
   Clock3,
   LogOut,
+  Sun,
+  Moon,
 } from "lucide-react";
 import "./styles.css";
 import { supabase, supabaseConfigured } from "./supabase";
@@ -260,6 +262,9 @@ function SessionLoader() {
 
 function PortalApp({ session }) {
   const [page, setPage] = useState("Dashboard"),
+    [theme, setTheme] = useState(
+      () => window.localStorage.getItem("emirates-portal-theme") || "dark",
+    ),
     [mobile, setMobile] = useState(false),
     [toast, setToast] = useState(""),
     [flights, setFlights] = useState([]),
@@ -275,6 +280,9 @@ function PortalApp({ session }) {
     [portalRole, setPortalRole] = useState("crew"),
     [accessPermissions, setAccessPermissions] = useState([]),
     [crewMembers, setCrewMembers] = useState([]);
+  useEffect(() => {
+    window.localStorage.setItem("emirates-portal-theme", theme);
+  }, [theme]);
   const notify = (m) => {
     setToast(m);
     setTimeout(() => setToast(""), 2400);
@@ -411,7 +419,7 @@ function PortalApp({ session }) {
     managementPages.has(name),
   );
   return (
-    <div className="app">
+    <div className="app" data-theme={theme}>
       <aside className={mobile ? "open" : ""}>
         <div className="side-head">
           <Logo />
@@ -466,16 +474,28 @@ function PortalApp({ session }) {
             <p>EMIRATES CREW</p>
             <h1>{page}</h1>
           </div>
-          <button
-            className="user user-button"
-            onClick={() => setProfileOpen(true)}
-          >
-            <div>
-              <strong>{rpName}</strong>
-              <span>{rankName} · Profile</span>
-            </div>
-            <div className="avatar">{rpName.slice(0, 2).toUpperCase()}</div>
-          </button>
+          <div className="header-actions">
+            {page === "Dashboard" && (
+              <button
+                className="theme-toggle"
+                onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+                aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+              >
+                {theme === "dark" ? <Sun /> : <Moon />}
+                <span>{theme === "dark" ? "Light mode" : "Dark mode"}</span>
+              </button>
+            )}
+            <button
+              className="user user-button"
+              onClick={() => setProfileOpen(true)}
+            >
+              <div>
+                <strong>{rpName}</strong>
+                <span>{rankName} · Profile</span>
+              </div>
+              <div className="avatar">{rpName.slice(0, 2).toUpperCase()}</div>
+            </button>
+          </div>
         </header>
         {page === "Dashboard" ? (
           <Dashboard

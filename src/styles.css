@@ -255,6 +255,19 @@ body {
 }
 .app {
   min-height: 100vh;
+  background: var(--ink);
+  color: var(--white);
+  transition: background 0.25s ease, color 0.25s ease;
+}
+.app[data-theme="light"] {
+  --ink: #f4f0ed;
+  --panel: #ffffff;
+  --panel2: #ffffff;
+  --line: #ded5d0;
+  --muted: #776e6a;
+  --white: #281f20;
+  background: #f4f0ed;
+  color: #281f20;
 }
 button {
   font: inherit;
@@ -416,6 +429,37 @@ header h1 {
   margin: 0;
   font: 400 35px "Emirates";
 }
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+.theme-toggle {
+  border: 1px solid var(--line);
+  border-radius: 99px;
+  background: var(--panel2);
+  color: var(--white);
+  padding: 9px 13px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: 0.2s ease;
+}
+.theme-toggle:hover {
+  border-color: #a9001660;
+  transform: translateY(-1px);
+}
+.theme-toggle svg {
+  width: 16px;
+  height: 16px;
+  color: #d7a13a;
+}
+.app[data-theme="light"] .theme-toggle svg {
+  color: #850011;
+}
 .user {
   display: flex;
   align-items: center;
@@ -531,6 +575,60 @@ header h1 {
   background: var(--panel2);
   border: 1px solid #ffffff08;
   border-radius: 15px;
+}
+.app[data-theme="light"] .panel {
+  border-color: var(--line);
+  box-shadow: 0 10px 30px #4a1f2710;
+}
+.app[data-theme="light"] .rail {
+  background: #e9e2de;
+}
+.app[data-theme="light"] .next .plane-icon,
+.app[data-theme="light"] .chip,
+.app[data-theme="light"] .mini,
+.app[data-theme="light"] .resource,
+.app[data-theme="light"] .allocation,
+.app[data-theme="light"] .duty-board,
+.app[data-theme="light"] .review-card,
+.app[data-theme="light"] .review-date-grid > div,
+.app[data-theme="light"] .review-reason,
+.app[data-theme="light"] .history-row,
+.app[data-theme="light"] .assignment-row,
+.app[data-theme="light"] .role-create,
+.app[data-theme="light"] .permission-grid label,
+.app[data-theme="light"] .modal-card {
+  background: #f8f5f3;
+  border-color: var(--line);
+}
+.app[data-theme="light"] input,
+.app[data-theme="light"] select,
+.app[data-theme="light"] textarea,
+.app[data-theme="light"] .role-name-input {
+  background: #fff;
+  border-color: var(--line);
+  color: #281f20;
+}
+.app[data-theme="light"] .review-card.selected {
+  background: #f6e9ea;
+  border-color: #a94450;
+}
+.app[data-theme="light"] .hero-copy,
+.app[data-theme="light"] .hero-copy p,
+.app[data-theme="light"] .hero h2,
+.app[data-theme="light"] .pay {
+  color: #fff;
+}
+.app[data-theme="light"] .chip:not(.green) {
+  color: #5b5150;
+}
+.app[data-theme="light"] .review-reason p,
+.app[data-theme="light"] .review-empty strong {
+  color: #352c2c;
+}
+.app[data-theme="light"] .toast {
+  background: #fff;
+  color: #281f20;
+  border-color: var(--line);
 }
 .next {
   text-align: center;
