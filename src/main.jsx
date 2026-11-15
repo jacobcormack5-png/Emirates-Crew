@@ -25,6 +25,10 @@ import {
   SlidersHorizontal,
   RefreshCw,
   UserCircle,
+  ClipboardCheck,
+  CheckCircle2,
+  XCircle,
+  Clock3,
 } from "lucide-react";
 import "./styles.css";
 import { supabase, supabaseConfigured } from "./supabase";
@@ -33,6 +37,7 @@ const nav = [
   ["Dashboard", LayoutDashboard],
   ["Allocations", CalendarDays],
   ["Absence", Palmtree],
+  ["Absence Review", ClipboardCheck],
   ["Records", FolderClosed],
   ["Documentation", FileText],
   ["Vacancies", Binoculars],
@@ -208,6 +213,7 @@ function PortalApp({ session }) {
     [rpName, setRpName] = useState("Jakele7"),
     [discordId, setDiscordId] = useState(""),
     [discordRoles, setDiscordRoles] = useState([]),
+    [portalRole, setPortalRole] = useState("personnel"),
     [crewMembers, setCrewMembers] = useState([]);
   const notify = (m) => {
     setToast(m);
@@ -251,6 +257,7 @@ function PortalApp({ session }) {
         setRpName(profile.rp_name);
         setDiscordId(profile.discord_id || "");
         setDiscordRoles(profile.discord_roles || []);
+        setPortalRole(profile.portal_role || "personnel");
         setBalance(profile.total_pay || 0);
       }
       setFlights(
@@ -303,7 +310,13 @@ function PortalApp({ session }) {
           </button>
         </div>
         <nav>
-          {nav.map(([n, I]) => (
+          {nav
+            .filter(
+              ([n]) =>
+                n !== "Absence Review" ||
+                ["operations", "admin"].includes(portalRole),
+            )
+            .map(([n, I]) => (
             <button
               key={n}
               className={page === n ? "active" : ""}
@@ -315,7 +328,7 @@ function PortalApp({ session }) {
               <I />
               <span>{n}</span>
             </button>
-          ))}
+            ))}
         </nav>
         <div className="side-bottom">
           <div className="status-dot" />
@@ -575,6 +588,10 @@ const pageInfo = {
     "Browse open sectors and manage your upcoming duties.",
   ],
   Absence: ["Time away", "Submit and track leave or absence requests."],
+  "Absence Review": [
+    "Absence review",
+    "Review pending leave requests and record management decisions.",
+  ],
   Records: [
     "Disciplinary record",
     "Review disciplinary actions issued to your account.",
@@ -627,6 +644,9 @@ function Page(p) {
           notify={p.notify}
           userId={p.userId}
         />
+      )}{" "}
+      {p.name === "Absence Review" && (
+        <AbsenceReview notify={p.notify} userId={p.userId} />
       )}{" "}
       {p.name === "Records" && <Records items={p.discipline} />}{" "}
       {p.name === "Documentation" && <Documents notify={p.notify} />}{" "}
@@ -902,6 +922,247 @@ function Absence({ active, setActive, notify, userId }) {
         </p>
       </section>
     </div>
+  );
+}
+
+function AbsenceReview({ notify, userId }) {
+  const [requests, setRequests] = useState([]);
+  const [selectedId, setSelectedId] = useState(null);
+  const [reviewNote, setReviewNote] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  const loadRequests = async () => {
+    setLoading(true);
+    const [{ data: requestRows, error }, { data: profiles }] =
+      await Promise.all([
+        supabase
+          .from("loa_requests")
+          .select("*")
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("crew_profiles")
+          .select("id,rp_name,rank_name,discord_username"),
+      ]);
+    if (error) {
+      setLoading(false);
+      return notify(error.message);
+    }
+    const people = Object.fromEntries(
+      (profiles || []).map((profile) => [profile.id, profile]),
+    );
+    setRequests(
+      (requestRows || []).map((request) => ({
+        ...request,
+        member: people[request.user_id] || null,
+      })),
+    );
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    loadRequests();
+  }, []);
+
+  const pending = requests.filter((request) => request.status === "pending");
+  const history = requests.filter((request) => request.status !== "pending");
+  const selected = pending.find((request) => request.id === selectedId) || null;
+
+  useEffect(() => {
+    if (!selectedId && pending[0]) setSelectedId(pending[0].id);
+  }, [requests, selectedId]);
+
+  const decide = async (status) => {
+    if (!selected || saving) return;
+    setSaving(true);
+    const note = reviewNote.trim();
+    const reviewedAt = new Date().toISOString();
+    const { data, error } = await supabase
+      .from("loa_requests")
+      .update({
+        status,
+        reviewed_by: userId,
+        review_note: note || null,
+        reviewed_at: reviewedAt,
+      })
+      .eq("id", selected.id)
+      .eq("status", "pending")
+      .select("id,status,review_note,reviewed_at")
+      .single();
+    setSaving(false);
+    if (error) return notify(error.message);
+    setRequests((current) =>
+      current.map((request) =>
+        request.id === data.id ? { ...request, ...data } : request,
+      ),
+    );
+    setSelectedId(null);
+    setReviewNote("");
+    notify(
+      `Absence ${status} — the crew member will be notified by Discord DM`,
+    );
+  };
+
+  const memberName = (request) =>
+    request.member?.rp_name || request.member?.discord_username || "Crew member";
+  const formatDate = (date) =>
+    new Date(`${date}T12:00:00`).toLocaleDateString("en-GB", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    });
+
+  return (
+    <>
+      <section className="panel review-toolbar">
+        <div>
+          <ClipboardCheck />
+          <div>
+            <strong>{pending.length} awaiting review</strong>
+            <span>Approve or deny submitted absence requests.</span>
+          </div>
+        </div>
+        <button className="secondary" onClick={loadRequests} disabled={loading}>
+          <RefreshCw className={loading ? "spinning" : ""} /> Refresh requests
+        </button>
+      </section>
+
+      <div className="absence-review-grid">
+        <section className="panel review-queue">
+          <div className="section-title">
+            <div>
+              <p>PENDING</p>
+              <h3>Review queue</h3>
+            </div>
+            <Chip>{pending.length}</Chip>
+          </div>
+          {loading ? (
+            <div className="review-empty">Loading requests…</div>
+          ) : pending.length ? (
+            <div className="review-cards">
+              {pending.map((request) => (
+                <button
+                  key={request.id}
+                  className={`review-card ${selectedId === request.id ? "selected" : ""}`}
+                  onClick={() => {
+                    setSelectedId(request.id);
+                    setReviewNote("");
+                  }}
+                >
+                  <div className="review-avatar">
+                    {memberName(request).slice(0, 2).toUpperCase()}
+                  </div>
+                  <div>
+                    <strong>{memberName(request)}</strong>
+                    <span>
+                      {formatDate(request.starts_on)} – {formatDate(request.ends_on)}
+                    </span>
+                  </div>
+                  <ChevronRight />
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="review-empty">
+              <CheckCircle2 />
+              <strong>Queue clear</strong>
+              <span>There are no absence requests waiting for review.</span>
+            </div>
+          )}
+        </section>
+
+        <section className="panel review-detail">
+          {selected ? (
+            <>
+              <div className="section-title">
+                <div>
+                  <p>REQUEST DETAILS</p>
+                  <h3>{memberName(selected)}</h3>
+                </div>
+                <Chip>AWAITING REVIEW</Chip>
+              </div>
+              <div className="review-date-grid">
+                <div>
+                  <span>Starts</span>
+                  <strong>{formatDate(selected.starts_on)}</strong>
+                </div>
+                <div>
+                  <span>Ends</span>
+                  <strong>{formatDate(selected.ends_on)}</strong>
+                </div>
+                <div>
+                  <span>Submitted</span>
+                  <strong>{new Date(selected.created_at).toLocaleDateString("en-GB")}</strong>
+                </div>
+              </div>
+              <div className="review-reason">
+                <span>Reason supplied</span>
+                <p>{selected.reason}</p>
+              </div>
+              <label className="field">
+                <span>Review note (optional)</span>
+                <textarea
+                  value={reviewNote}
+                  onChange={(event) => setReviewNote(event.target.value)}
+                  placeholder="Add context for the crew member and management record"
+                />
+              </label>
+              <div className="review-actions">
+                <button
+                  className="decision deny"
+                  onClick={() => decide("denied")}
+                  disabled={saving}
+                >
+                  <XCircle /> Deny request
+                </button>
+                <button
+                  className="decision approve"
+                  onClick={() => decide("approved")}
+                  disabled={saving}
+                >
+                  <CheckCircle2 /> Approve request
+                </button>
+              </div>
+            </>
+          ) : (
+            <div className="review-empty review-empty-detail">
+              <Clock3 />
+              <strong>Select a request</strong>
+              <span>Choose a pending request to view its full details.</span>
+            </div>
+          )}
+        </section>
+      </div>
+
+      <section className="panel review-history">
+        <div className="section-title">
+          <div>
+            <p>RECENT ACTIVITY</p>
+            <h3>Review history</h3>
+          </div>
+        </div>
+        {history.length ? (
+          <div className="history-list">
+            {history.slice(0, 12).map((request) => (
+              <div className="history-row" key={request.id}>
+                <div>
+                  <strong>{memberName(request)}</strong>
+                  <span>
+                    {formatDate(request.starts_on)} – {formatDate(request.ends_on)}
+                  </span>
+                </div>
+                <span className={`review-status ${request.status}`}>
+                  {request.status}
+                </span>
+                <span>{request.review_note || "No review note"}</span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="review-empty compact">No reviewed requests yet.</div>
+        )}
+      </section>
+    </>
   );
 }
 function Records({ items }) {
