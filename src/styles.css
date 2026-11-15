@@ -260,15 +260,39 @@ nav svg {
   margin-top: auto;
   border-top: 1px solid #ffffff30;
   padding: 20px 6px 0;
-  display: grid;
-  grid-template-columns: 12px 1fr;
-  align-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
   font-size: 12px;
 }
-.side-bottom small {
-  grid-column: 2;
-  opacity: 0.55;
-  margin-top: 4px;
+.side-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 8px;
+}
+.side-status span {
+  opacity: 0.72;
+}
+.logout-button {
+  width: 100%;
+  border: 1px solid #ffffff35;
+  background: #65000d55;
+  border-radius: 10px;
+  padding: 11px 12px;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+}
+.logout-button:hover {
+  background: #65000d99;
+  border-color: #ffffff66;
+}
+.logout-button svg {
+  width: 18px;
 }
 .status-dot {
   width: 7px;
