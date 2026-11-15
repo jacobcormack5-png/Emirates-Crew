@@ -5,6 +5,13 @@ const supabaseAdmin = () =>
     auth: { persistSession: false, autoRefreshToken: false },
   });
 
+const supabaseAuth = () =>
+  createClient(
+    process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL,
+    process.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+    { auth: { persistSession: false, autoRefreshToken: false } },
+  );
+
 export default async function handler(request, response) {
   if (request.method !== "GET")
     return response.status(405).json({ error: "Method not allowed" });
@@ -12,7 +19,8 @@ export default async function handler(request, response) {
     !process.env.EMIRATES_BOT_URL ||
     !process.env.PORTAL_API_SECRET ||
     !process.env.SUPABASE_URL ||
-    !process.env.SUPABASE_SERVICE_ROLE_KEY
+    !process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    !process.env.VITE_SUPABASE_PUBLISHABLE_KEY
   )
     return response
       .status(503)
@@ -23,11 +31,22 @@ export default async function handler(request, response) {
     "",
   );
   const discordId = String(request.query.discordId || "").trim();
+  if (!accessToken)
+    return response.status(401).json({
+      error: "Your portal session is missing. Please sign in again.",
+    });
+
   const admin = supabaseAdmin();
   const {
     data: { user },
-  } = await admin.auth.getUser(accessToken);
-  if (!user) return response.status(401).json({ error: "Sign in required" });
+    error: authError,
+  } = await supabaseAuth().auth.getUser(accessToken);
+  if (authError || !user) {
+    console.error("Role refresh session validation failed", authError?.message);
+    return response.status(401).json({
+      error: "Your portal session expired. Please sign out and sign in again.",
+    });
+  }
 
   const { data: profile } = await admin
     .from("crew_profiles")

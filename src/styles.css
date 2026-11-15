@@ -256,6 +256,11 @@ nav button.active {
 nav svg {
   width: 19px;
 }
+.nav-divider {
+  height: 1px;
+  margin: 10px 8px;
+  background: #ffffff38;
+}
 .side-bottom {
   margin-top: auto;
   border-top: 1px solid #ffffff30;

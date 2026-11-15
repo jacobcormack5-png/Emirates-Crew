@@ -34,18 +34,37 @@ import {
 import "./styles.css";
 import { supabase, supabaseConfigured } from "./supabase";
 
+async function fetchDiscordRoles(discordId) {
+  const {
+    data: { session },
+    error,
+  } = await supabase.auth.getSession();
+  if (error || !session?.access_token)
+    throw new Error("Your portal session expired. Please sign in again.");
+
+  return fetch(`/api/roles?discordId=${encodeURIComponent(discordId)}`, {
+    headers: { authorization: `Bearer ${session.access_token}` },
+  });
+}
+
 const nav = [
   ["Dashboard", LayoutDashboard],
   ["Allocations", CalendarDays],
   ["Absence", Palmtree],
-  ["Absence Review", ClipboardCheck],
   ["Records", FolderClosed],
   ["Documentation", FileText],
   ["Vacancies", Binoculars],
+  ["Absence Review", ClipboardCheck],
   ["Operations", PlaneTakeoff],
   ["Disciplinary", ShieldAlert],
   ["Portal Management", Settings2],
 ];
+const managementPages = new Set([
+  "Absence Review",
+  "Operations",
+  "Disciplinary",
+  "Portal Management",
+]);
 const portalPermissions = [
   "View allocations",
   "Submit absence",
@@ -291,10 +310,7 @@ function PortalApp({ session }) {
         setAccessPermissions(assignedPortalRole?.permissions || []);
         setBalance(profile.total_pay || 0);
         if (memberId) {
-          const response = await fetch(
-            `/api/roles?discordId=${encodeURIComponent(memberId)}`,
-            { headers: { authorization: `Bearer ${session.access_token}` } },
-          ).catch(() => null);
+          const response = await fetchDiscordRoles(memberId).catch(() => null);
           if (response?.ok) {
             const roleData = await response.json();
             setDiscordRoles(roleData.roles || []);
@@ -350,6 +366,18 @@ function PortalApp({ session }) {
     };
     load().catch(() => notify("Could not load your Supabase crew record"));
   }, [session.user.id]);
+  const visibleNav = nav.filter(([n]) => {
+    if (n === "Portal Management") return portalRole === "admin";
+    if (n === "Dashboard") return true;
+    if (portalRole === "admin") return true;
+    if (n === "Operations" && portalRole === "operations") return true;
+    if (n === "Absence Review" && portalRole === "operations") return true;
+    if (n === "Disciplinary" && portalRole === "discipline") return true;
+    return accessPermissions.includes(pagePermissions[n]);
+  });
+  const managementStart = visibleNav.findIndex(([name]) =>
+    managementPages.has(name),
+  );
   return (
     <div className="app">
       <aside className={mobile ? "open" : ""}>
@@ -364,29 +392,23 @@ function PortalApp({ session }) {
           </button>
         </div>
         <nav>
-          {nav
-            .filter(([n]) => {
-              if (n === "Portal Management") return portalRole === "admin";
-              if (n === "Dashboard") return true;
-              if (portalRole === "admin") return true;
-              if (n === "Operations" && portalRole === "operations") return true;
-              if (n === "Absence Review" && portalRole === "operations") return true;
-              if (n === "Disciplinary" && portalRole === "discipline") return true;
-              return accessPermissions.includes(pagePermissions[n]);
-            })
-            .map(([n, I]) => (
-            <button
-              key={n}
-              className={page === n ? "active" : ""}
-              onClick={() => {
-                setPage(n);
-                setMobile(false);
-              }}
-            >
-              <I />
-              <span>{n}</span>
-            </button>
-            ))}
+          {visibleNav.map(([n, I], index) => (
+            <React.Fragment key={n}>
+              {index === managementStart && (
+                <div className="nav-divider" aria-hidden="true" />
+              )}
+              <button
+                className={page === n ? "active" : ""}
+                onClick={() => {
+                  setPage(n);
+                  setMobile(false);
+                }}
+              >
+                <I />
+                <span>{n}</span>
+              </button>
+            </React.Fragment>
+          ))}
         </nav>
         <div className="side-bottom">
           <div className="side-status">
@@ -467,7 +489,6 @@ function PortalApp({ session }) {
           setRoles={setDiscordRoles}
           setPortalRoles={setRoles}
           crewMembers={crewMembers}
-          accessToken={session.access_token}
           close={() => setProfileOpen(false)}
           notify={notify}
           userId={session.user.id}
@@ -1782,7 +1803,6 @@ function ProfileModal({
   setRoles,
   setPortalRoles,
   crewMembers,
-  accessToken,
   close,
   notify,
   userId,
@@ -1794,10 +1814,7 @@ function ProfileModal({
     if (!memberId.trim()) return notify("Enter a Discord member ID first");
     setLoading(true);
     try {
-      const response = await fetch(
-        `/api/roles?discordId=${encodeURIComponent(memberId.trim())}`,
-        { headers: { authorization: `Bearer ${accessToken}` } },
-      );
+      const response = await fetchDiscordRoles(memberId.trim());
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Role refresh failed");
       setRoles(data.roles || []);
