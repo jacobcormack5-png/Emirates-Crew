@@ -157,17 +157,25 @@ with check ((select auth.uid()) = id or private.has_portal_role(array['admin']::
 revoke update on public.crew_profiles from authenticated;
 grant update (rp_name) on public.crew_profiles to authenticated;
 create policy flights_read on public.flights for select to authenticated using (true);
-create policy flights_manage on public.flights for all to authenticated
+create policy flights_insert on public.flights for insert to authenticated
+with check (private.has_portal_role(array['operations','admin']::public.portal_role[]));
+create policy flights_update on public.flights for update to authenticated
 using (private.has_portal_role(array['operations','admin']::public.portal_role[]))
 with check (private.has_portal_role(array['operations','admin']::public.portal_role[]));
+create policy flights_delete on public.flights for delete to authenticated
+using (private.has_portal_role(array['operations','admin']::public.portal_role[]));
 create policy allocations_read on public.flight_allocations for select to authenticated using (true);
 create policy allocations_join on public.flight_allocations for insert to authenticated with check ((select auth.uid()) = user_id);
 create policy allocations_leave on public.flight_allocations for delete to authenticated using ((select auth.uid()) = user_id or private.has_portal_role(array['operations','admin']::public.portal_role[]));
 create policy discipline_read on public.disciplinary_actions for select to authenticated
 using ((select auth.uid()) = user_id or private.has_portal_role(array['discipline','admin']::public.portal_role[]));
-create policy discipline_manage on public.disciplinary_actions for all to authenticated
+create policy discipline_insert on public.disciplinary_actions for insert to authenticated
+with check (private.has_portal_role(array['discipline','admin']::public.portal_role[]));
+create policy discipline_update on public.disciplinary_actions for update to authenticated
 using (private.has_portal_role(array['discipline','admin']::public.portal_role[]))
 with check (private.has_portal_role(array['discipline','admin']::public.portal_role[]));
+create policy discipline_delete on public.disciplinary_actions for delete to authenticated
+using (private.has_portal_role(array['discipline','admin']::public.portal_role[]));
 create policy loa_read on public.loa_requests for select to authenticated
 using ((select auth.uid()) = user_id or private.has_portal_role(array['operations','admin']::public.portal_role[]));
 create policy loa_submit on public.loa_requests for insert to authenticated with check ((select auth.uid()) = user_id and status = 'pending');
