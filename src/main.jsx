@@ -150,7 +150,10 @@ function App() {
         return;
       }
 
-      const { data: current } = await supabase.auth.getSession();
+      const [{ data: current }] = await Promise.all([
+        supabase.auth.getSession(),
+        new Promise((resolve) => setTimeout(resolve, 1400)),
+      ]);
       if (current.session) {
         restoring = false;
         return finishSignIn(current.session);
@@ -162,8 +165,7 @@ function App() {
     return () => subscription.unsubscribe();
   }, []);
 
-  if (session === undefined)
-    return <div className="auth-loading">Loading Emirates Crew…</div>;
+  if (session === undefined) return <SessionLoader />;
   if (authError)
     return (
       <div className="auth-loading callback-error">
@@ -197,36 +199,61 @@ function Landing() {
     }
   };
   return (
-    <main className="landing">
-      <div className="landing-glow" />
-      <header className="landing-nav">
-        <Logo />
-        <span>Personnel Operations</span>
-      </header>
-      <section className="landing-copy">
-        <p>EMIRATES CREW PORTAL</p>
-        <h1>
-          Your roster.
-          <br />
-          Your operations.
-          <br />
-          <em>One place.</em>
-        </h1>
-        <span>
-          Sign in securely with Discord to view allocations, request leave and
-          manage your Emirates Virtual crew profile.
-        </span>
+    <main className="auth-gate">
+      <section className="auth-card">
+        <AuthBrand />
+        <div className="auth-divider" aria-hidden="true">
+          <span />
+          <Plane />
+        </div>
+        <p className="auth-kicker">WELCOME TO ECREW</p>
+        <h1>Your crew portal</h1>
+        <p className="auth-description">
+          Sign in with Discord to continue to your allocations, records and
+          crew operations.
+        </p>
         <button className="discord-button" onClick={signIn} disabled={busy}>
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="M19.5 5.3A16 16 0 0 0 15.4 4l-.5 1a14 14 0 0 0-5.8 0l-.5-1a16 16 0 0 0-4.1 1.3C1.9 9.2 1.2 13 1.5 16.8A16.5 16.5 0 0 0 6.6 19l1.2-1.7-1.8-.9.4-.3c3.6 1.7 7.6 1.7 11.2 0l.4.3-1.8.9 1.2 1.7a16.5 16.5 0 0 0 5.1-2.2c.4-4.4-.8-8.2-3-11.5ZM8.7 14.6c-1.1 0-2-1-2-2.2s.9-2.2 2-2.2 2 1 2 2.2-.9 2.2-2 2.2Zm6.6 0c-1.1 0-2-1-2-2.2s.9-2.2 2-2.2 2 1 2 2.2-.9 2.2-2 2.2Z" />
           </svg>
-          {busy ? "Redirecting…" : "Sign in with Discord"}
+          {busy ? "Connecting to Discord…" : "Sign in with Discord"}
         </button>
         {error && <div className="auth-error">{error}</div>}
       </section>
-      <div className="landing-plane">
-        <img src="/emirates-a350.jpg" alt="Emirates aircraft" />
+    </main>
+  );
+}
+
+function AuthBrand() {
+  return (
+    <div className="auth-brand" aria-label="Emirates Crew Portal">
+      <div className="auth-brand-mark" aria-hidden="true">
+        <span>EK</span>
+        <i />
       </div>
+      <div>
+        <strong>Emirates Crew</strong>
+        <strong>Portal</strong>
+      </div>
+      <small>eCrew Portal</small>
+    </div>
+  );
+}
+
+function SessionLoader() {
+  return (
+    <main className="auth-gate auth-checking">
+      <section className="auth-card" aria-live="polite">
+        <AuthBrand />
+        <div className="session-track" aria-hidden="true">
+          <span className="session-progress" />
+          <span className="session-plane"><Plane /></span>
+        </div>
+        <p className="session-message">Checking your session…</p>
+        <div className="session-dots" aria-hidden="true">
+          <i /><i /><i />
+        </div>
+      </section>
     </main>
   );
 }
