@@ -212,6 +212,7 @@ function PortalApp({ session }) {
     [roles, setRoles] = useState(initialRoles),
     [profileOpen, setProfileOpen] = useState(false),
     [rpName, setRpName] = useState("Jakele7"),
+    [rankName, setRankName] = useState("Crew Member"),
     [discordId, setDiscordId] = useState(""),
     [discordRoles, setDiscordRoles] = useState([]),
     [portalRole, setPortalRole] = useState("crew"),
@@ -261,10 +262,26 @@ function PortalApp({ session }) {
       ]);
       if (profile) {
         setRpName(profile.rp_name);
-        setDiscordId(profile.discord_id || "");
+        const memberId =
+          profile.discord_id ||
+          session.user.user_metadata?.provider_id ||
+          session.user.user_metadata?.sub ||
+          "";
+        setDiscordId(memberId);
         setDiscordRoles(profile.discord_roles || []);
+        setRankName(profile.rank_name || "Crew Member");
         setPortalRole(profile.portal_role || "crew");
         setBalance(profile.total_pay || 0);
+        if (memberId) {
+          const response = await fetch(
+            `/api/roles?discordId=${encodeURIComponent(memberId)}`,
+          ).catch(() => null);
+          if (response?.ok) {
+            const roleData = await response.json();
+            setDiscordRoles(roleData.roles || []);
+            setRankName(roleData.primaryRole || "Crew Member");
+          }
+        }
       }
       setFlights(
         (flightRows || []).map((flight) => ({
@@ -369,7 +386,7 @@ function PortalApp({ session }) {
           >
             <div>
               <strong>{rpName}</strong>
-              <span>Chief Operations Officer · Profile</span>
+              <span>{rankName} · Profile</span>
             </div>
             <div className="avatar">{rpName.slice(0, 2).toUpperCase()}</div>
           </button>
@@ -378,6 +395,7 @@ function PortalApp({ session }) {
           <Dashboard
             go={setPage}
             rpName={rpName}
+            rankName={rankName}
             flights={flights}
             balance={balance}
             absence={absence}
@@ -408,6 +426,8 @@ function PortalApp({ session }) {
         <ProfileModal
           rpName={rpName}
           setRpName={setRpName}
+          rankName={rankName}
+          setRankName={setRankName}
           discordId={discordId}
           setDiscordId={setDiscordId}
           roles={discordRoles}
@@ -442,7 +462,15 @@ function Logo() {
 function Chip({ children, tone = "" }) {
   return <span className={"chip " + tone}>{children}</span>;
 }
-function Dashboard({ go, rpName, flights, balance, absence, discipline }) {
+function Dashboard({
+  go,
+  rpName,
+  rankName,
+  flights,
+  balance,
+  absence,
+  discipline,
+}) {
   const completed = balance / 20,
     upcoming = flights;
   return (
@@ -457,7 +485,7 @@ function Dashboard({ go, rpName, flights, balance, absence, discipline }) {
             <br />
             {rpName}.
           </h2>
-          <p>Chief Operations Officer · Emirates Virtual</p>
+          <p>{rankName} · Emirates Virtual</p>
         </div>
         <div className="pay">
           <span>TOTAL PAY</span>
@@ -1616,6 +1644,8 @@ function CaseCard({ item }) {
 function ProfileModal({
   rpName,
   setRpName,
+  rankName,
+  setRankName,
   discordId,
   setDiscordId,
   roles,
@@ -1637,6 +1667,7 @@ function ProfileModal({
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Role refresh failed");
       setRoles(data.roles || []);
+      setRankName(data.primaryRole || "Crew Member");
       setDiscordId(memberId.trim());
       notify("Discord roles refreshed");
     } catch (error) {
@@ -1677,7 +1708,7 @@ function ProfileModal({
           </div>
           <div>
             <strong>{draft || "Crew member"}</strong>
-            <span>Chief Operations Officer</span>
+            <span>{rankName}</span>
           </div>
         </div>
         <Field
