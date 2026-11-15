@@ -214,7 +214,7 @@ function PortalApp({ session }) {
     [rpName, setRpName] = useState("Jakele7"),
     [discordId, setDiscordId] = useState(""),
     [discordRoles, setDiscordRoles] = useState([]),
-    [portalRole, setPortalRole] = useState("personnel"),
+    [portalRole, setPortalRole] = useState("crew"),
     [crewMembers, setCrewMembers] = useState([]);
   const notify = (m) => {
     setToast(m);
@@ -263,7 +263,7 @@ function PortalApp({ session }) {
         setRpName(profile.rp_name);
         setDiscordId(profile.discord_id || "");
         setDiscordRoles(profile.discord_roles || []);
-        setPortalRole(profile.portal_role || "personnel");
+        setPortalRole(profile.portal_role || "crew");
         setBalance(profile.total_pay || 0);
       }
       setFlights(
@@ -317,11 +317,14 @@ function PortalApp({ session }) {
         </div>
         <nav>
           {nav
-            .filter(
-              ([n]) =>
-                n !== "Absence Review" ||
-                ["operations", "admin"].includes(portalRole),
-            )
+            .filter(([n]) => {
+              if (["Operations", "Absence Review"].includes(n))
+                return ["operations", "admin"].includes(portalRole);
+              if (n === "Disciplinary")
+                return ["discipline", "admin"].includes(portalRole);
+              if (n === "Portal Management") return portalRole === "admin";
+              return true;
+            })
             .map(([n, I]) => (
             <button
               key={n}
