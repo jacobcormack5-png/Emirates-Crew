@@ -1808,6 +1808,30 @@ header h1 {
 .manage-row button.end-flight svg {
   width: 14px;
 }
+.operations-grid.claims-only {
+  grid-template-columns: 1fr;
+}
+.manage-row > .flight-actions {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+.manage-row .flight-actions button.secondary {
+  width: auto;
+  height: auto;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 12px;
+  border: 1px solid var(--line);
+  background: #ffffff08;
+  color: var(--text);
+  white-space: nowrap;
+}
+.manage-row .flight-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
 @media (max-width: 900px) {
   .allocation-head {
     grid-template-columns: 40px 1fr 85px 20px;

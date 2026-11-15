@@ -71,6 +71,7 @@ const portalPermissions = [
   "View records",
   "View documentation",
   "View vacancies",
+  "Claim flights",
   "Schedule flights",
   "Review absences",
   "Manage discipline",
@@ -81,7 +82,6 @@ const pagePermissions = {
   Records: "View records",
   Documentation: "View documentation",
   Vacancies: "View vacancies",
-  Operations: "Schedule flights",
   "Absence Review": "Review absences",
   Disciplinary: "Manage discipline",
 };
@@ -274,7 +274,7 @@ function PortalApp({ session }) {
           .single(),
         supabase
           .from("flights")
-          .select("*, flight_allocations(*)")
+          .select("*, flight_allocations(*), flight_claims(*)")
           .in("status", ["scheduled", "boarding"])
           .order("departure_at"),
         supabase
@@ -330,6 +330,7 @@ function PortalApp({ session }) {
             minute: "2-digit",
           }),
           aircraft: flight.aircraft,
+          claim: flight.flight_claims?.[0] || null,
           assignments: Object.fromEntries(
             (flight.flight_allocations || []).map((a) => [
               `${a.duty_role}:${a.slot_number - 1}`,
@@ -370,7 +371,11 @@ function PortalApp({ session }) {
     if (n === "Portal Management") return portalRole === "admin";
     if (n === "Dashboard") return true;
     if (portalRole === "admin") return true;
-    if (n === "Operations" && portalRole === "operations") return true;
+    if (n === "Operations")
+      return (
+        accessPermissions.includes("Claim flights") ||
+        accessPermissions.includes("Schedule flights")
+      );
     if (n === "Absence Review" && portalRole === "operations") return true;
     if (n === "Disciplinary" && portalRole === "discipline") return true;
     return accessPermissions.includes(pagePermissions[n]);
@@ -474,6 +479,7 @@ function PortalApp({ session }) {
             rpName={rpName}
             crewMembers={crewMembers}
             portalRole={portalRole}
+            accessPermissions={accessPermissions}
           />
         )}
       </main>
@@ -765,6 +771,9 @@ function Page(p) {
           setBalance={p.setBalance}
           notify={p.notify}
           userId={p.userId}
+          crewMembers={p.crewMembers}
+          portalRole={p.portalRole}
+          accessPermissions={p.accessPermissions}
         />
       )}{" "}
       {p.name === "Disciplinary" && (
@@ -1336,7 +1345,21 @@ function Documents({ notify }) {
     </>
   );
 }
-function Operations({ flights, setFlights, balance, setBalance, notify, userId }) {
+function Operations({
+  flights,
+  setFlights,
+  balance,
+  setBalance,
+  notify,
+  userId,
+  crewMembers,
+  portalRole,
+  accessPermissions,
+}) {
+  const canSchedule =
+    portalRole === "admin" || accessPermissions.includes("Schedule flights");
+  const canClaim =
+    canSchedule || accessPermissions.includes("Claim flights");
   const [form, setForm] = useState({
     code: "",
     origin: "Dubai",
@@ -1364,18 +1387,75 @@ function Operations({ flights, setFlights, balance, setBalance, notify, userId }
       .select("id,code,origin,destination,departure_at,aircraft")
       .single();
     if (error) return notify(error.message);
-    setFlights([...flights, {
-      id: data.id,
-      code: data.code,
-      origin: data.origin,
-      destination: data.destination,
-      date: new Date(data.departure_at).toLocaleDateString("en-GB"),
-      time: new Date(data.departure_at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }),
-      aircraft: data.aircraft,
-      assignments: {},
-    }]);
+    setFlights([
+      ...flights,
+      {
+        id: data.id,
+        code: data.code,
+        origin: data.origin,
+        destination: data.destination,
+        date: new Date(data.departure_at).toLocaleDateString("en-GB"),
+        time: new Date(data.departure_at).toLocaleTimeString("en-GB", {
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
+        aircraft: data.aircraft,
+        claim: null,
+        assignments: {},
+      },
+    ]);
     setForm({ ...form, code: "", destination: "", date: "", time: "" });
     notify("Flight scheduled successfully");
+  };
+  const toggleClaim = async (flight) => {
+    if (!canClaim) return notify("Your role cannot claim flights");
+    if (flight.claim) {
+      if (flight.claim.claimed_by !== userId && !canSchedule)
+        return notify(
+          "This flight has already been claimed by another dispatcher",
+        );
+      const { error } = await supabase
+        .from("flight_claims")
+        .delete()
+        .eq("flight_id", flight.id);
+      if (error) return notify(error.message);
+      setFlights(
+        flights.map((item) =>
+          item.id === flight.id ? { ...item, claim: null } : item,
+        ),
+      );
+      return notify("Flight claim released");
+    }
+    const claim = {
+      flight_id: flight.id,
+      claimed_by: userId,
+      claimed_at: new Date().toISOString(),
+    };
+    const { data, error } = await supabase
+      .from("flight_claims")
+      .insert(claim)
+      .select("flight_id,claimed_by,claimed_at")
+      .single();
+    if (error)
+      return notify(
+        error.code === "23505"
+          ? "This flight has already been claimed"
+          : error.message,
+      );
+    setFlights(
+      flights.map((item) =>
+        item.id === flight.id ? { ...item, claim: data } : item,
+      ),
+    );
+    notify("Flight claimed successfully");
+  };
+  const claimedBy = (flight) => {
+    if (!flight.claim) return "Unclaimed";
+    if (flight.claim.claimed_by === userId) return "Claimed by you";
+    const member = crewMembers.find(
+      (person) => person.id === flight.claim.claimed_by,
+    );
+    return `Claimed by ${member?.rp_name || member?.discord_username || "another dispatcher"}`;
   };
   const end = async (f) => {
     const attended = Object.values(f.assignments || {}).includes("Jakele7");
@@ -1390,8 +1470,9 @@ function Operations({ flights, setFlights, balance, setBalance, notify, userId }
     );
   };
   return (
-    <div className="admin-grid">
-      <form className="panel admin-form" onSubmit={submit}>
+    <div className={`admin-grid operations-grid ${canSchedule ? "" : "claims-only"}`}>
+      {canSchedule && (
+        <form className="panel admin-form" onSubmit={submit}>
         <div className="section-title">
           <div>
             <p>NEW OPERATION</p>
@@ -1448,7 +1529,8 @@ function Operations({ flights, setFlights, balance, setBalance, notify, userId }
         <button className="primary" type="submit">
           <Plus /> Schedule flight
         </button>
-      </form>
+        </form>
+      )}
       <AdminList
         title="Scheduled flights"
         count={flights.length}
@@ -1461,11 +1543,26 @@ function Operations({ flights, setFlights, balance, setBalance, notify, userId }
               <span>
                 {f.origin} → {f.destination} ·{" "}
                 {Object.keys(f.assignments || {}).length} attending
+                {" · "}{claimedBy(f)}
               </span>
             </div>
-            <button className="end-flight" onClick={() => end(f)}>
-              <PlaneTakeoff /> End flight
-            </button>
+            <div className="flight-actions">
+              <button
+                className="secondary"
+                onClick={() => toggleClaim(f)}
+                disabled={Boolean(
+                  f.claim && f.claim.claimed_by !== userId && !canSchedule,
+                )}
+              >
+                <ClipboardCheck />
+                {f.claim?.claimed_by === userId ? "Release claim" : "Claim flight"}
+              </button>
+              {canSchedule && (
+                <button className="end-flight" onClick={() => end(f)}>
+                  <PlaneTakeoff /> End flight
+                </button>
+              )}
+            </div>
           </div>
         ))}
       </AdminList>
@@ -1675,7 +1772,7 @@ function PortalManagement({ roles, setRoles, notify, userId, crewMembers }) {
           value={newRoleName}
           onChange={(event) => setNewRoleName(event.target.value)}
           placeholder="Role name"
-          maxLength={50}
+          maxLength={100}
           required
         />
         <button className="primary" type="submit"><Plus /> Create role</button>
@@ -1687,7 +1784,7 @@ function PortalManagement({ roles, setRoles, notify, userId, crewMembers }) {
               <input
                 className="role-name-input"
                 value={role.name}
-                maxLength={50}
+                maxLength={100}
                 onChange={(event) =>
                   setRoles(
                     roles.map((item, roleIndex) =>
@@ -1713,7 +1810,9 @@ function PortalManagement({ roles, setRoles, notify, userId, crewMembers }) {
                 <span>
                   <strong>{p}</strong>
                   <small>
-                    {p === "Schedule flights"
+                    {p === "Claim flights"
+                      ? "Claim or release scheduled flights without creating them."
+                      : p === "Schedule flights"
                       ? "Create, edit and remove flight operations."
                       : p === "Manage discipline"
                         ? "Issue and remove disciplinary actions."

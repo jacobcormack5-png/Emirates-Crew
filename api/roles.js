@@ -75,18 +75,52 @@ export default async function handler(request, response) {
     .catch(() => ({ error: "Invalid bot response" }));
 
   if (upstream.ok && Array.isArray(data.roles)) {
-    const discoveredRoles = data.roles.map((name, index) => ({
-      name,
-      discord_role_id: data.roleIds?.[index] || null,
-      permissions: [],
-      source: "discord",
-      created_by: null,
-    }));
-    if (discoveredRoles.length)
-      await admin.from("portal_roles").upsert(discoveredRoles, {
-        onConflict: "name",
-        ignoreDuplicates: true,
-      });
+    const discoveredRoles = data.roles
+      .map((name, index) => ({
+        name: String(name || "").trim(),
+        discord_role_id: data.roleIds?.[index]
+          ? String(data.roleIds[index])
+          : null,
+      }))
+      .filter((role) => role.name.length >= 1 && role.name.length <= 100);
+    const { data: existingRoleRows } = await admin
+      .from("portal_roles")
+      .select("id,name,discord_role_id");
+    const existingRoles = existingRoleRows || [];
+    for (const role of discoveredRoles) {
+      const existing = (existingRoles || []).find(
+        (candidate) =>
+          (role.discord_role_id &&
+            candidate.discord_role_id === role.discord_role_id) ||
+          candidate.name.toLowerCase() === role.name.toLowerCase(),
+      );
+      if (existing) {
+        if (!existing.discord_role_id && role.discord_role_id)
+          await admin
+            .from("portal_roles")
+            .update({ discord_role_id: role.discord_role_id })
+            .eq("id", existing.id);
+        continue;
+      }
+      const { data: createdRole, error: roleError } = await admin
+        .from("portal_roles")
+        .insert({
+          name: role.name,
+          discord_role_id: role.discord_role_id,
+          permissions: [],
+          source: "discord",
+          created_by: null,
+        })
+        .select("id,name,discord_role_id")
+        .single();
+      if (roleError)
+        console.error(
+          "Could not add Discord role to portal",
+          role.name,
+          roleError.message,
+        );
+      else existingRoles.push(createdRole);
+    }
     await admin
       .from("crew_profiles")
       .update({
