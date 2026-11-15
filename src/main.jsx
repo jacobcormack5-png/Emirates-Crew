@@ -46,15 +46,26 @@ const nav = [
   ["Disciplinary", ShieldAlert],
   ["Portal Management", Settings2],
 ];
-const initialRoles = [
-  {
-    name: "Chief Operations Officer",
-    members: 1,
-    permissions: ["Schedule flights", "Manage discipline", "Manage portal"],
-  },
-  { name: "Flight Dispatcher", members: 3, permissions: ["Schedule flights"] },
-  { name: "Cabin Crew", members: 24, permissions: [] },
+const portalPermissions = [
+  "View allocations",
+  "Submit absence",
+  "View records",
+  "View documentation",
+  "View vacancies",
+  "Schedule flights",
+  "Review absences",
+  "Manage discipline",
 ];
+const pagePermissions = {
+  Allocations: "View allocations",
+  Absence: "Submit absence",
+  Records: "View records",
+  Documentation: "View documentation",
+  Vacancies: "View vacancies",
+  Operations: "Schedule flights",
+  "Absence Review": "Review absences",
+  Disciplinary: "Manage discipline",
+};
 const dutyGroups = [
   {
     title: "Supervisory Duties",
@@ -209,13 +220,14 @@ function PortalApp({ session }) {
     [balance, setBalance] = useState(0),
     [absence, setAbsence] = useState(false),
     [discipline, setDiscipline] = useState([]),
-    [roles, setRoles] = useState(initialRoles),
+    [roles, setRoles] = useState([]),
     [profileOpen, setProfileOpen] = useState(false),
     [rpName, setRpName] = useState("Jakele7"),
     [rankName, setRankName] = useState("Crew Member"),
     [discordId, setDiscordId] = useState(""),
     [discordRoles, setDiscordRoles] = useState([]),
     [portalRole, setPortalRole] = useState("crew"),
+    [accessPermissions, setAccessPermissions] = useState([]),
     [crewMembers, setCrewMembers] = useState([]);
   const notify = (m) => {
     setToast(m);
@@ -234,6 +246,7 @@ function PortalApp({ session }) {
         { data: recordRows },
         { data: loaRows },
         { data: profileRows },
+        { data: portalRoleRows },
       ] = await Promise.all([
         supabase
           .from("crew_profiles")
@@ -257,8 +270,9 @@ function PortalApp({ session }) {
           .eq("status", "pending"),
         supabase
           .from("crew_profiles")
-          .select("id,rp_name,rank_name,discord_username")
+          .select("id,rp_name,rank_name,discord_username,portal_role_id")
           .order("rp_name"),
+        supabase.from("portal_roles").select("*").order("name"),
       ]);
       if (profile) {
         setRpName(profile.rp_name);
@@ -271,6 +285,10 @@ function PortalApp({ session }) {
         setDiscordRoles(profile.discord_roles || []);
         setRankName(profile.rank_name || "Crew Member");
         setPortalRole(profile.portal_role || "crew");
+        const assignedPortalRole = (portalRoleRows || []).find(
+          (role) => role.id === profile.portal_role_id,
+        );
+        setAccessPermissions(assignedPortalRole?.permissions || []);
         setBalance(profile.total_pay || 0);
         if (memberId) {
           const response = await fetch(
@@ -316,6 +334,14 @@ function PortalApp({ session }) {
       );
       setAbsence(Boolean(loaRows?.length));
       setCrewMembers(profileRows || []);
+      setRoles(
+        (portalRoleRows || []).map((role) => ({
+          ...role,
+          members: (profileRows || []).filter(
+            (member) => member.portal_role_id === role.id,
+          ).length,
+        })),
+      );
     };
     load().catch(() => notify("Could not load your Supabase crew record"));
   }, [session.user.id]);
@@ -335,12 +361,13 @@ function PortalApp({ session }) {
         <nav>
           {nav
             .filter(([n]) => {
-              if (["Operations", "Absence Review"].includes(n))
-                return ["operations", "admin"].includes(portalRole);
-              if (n === "Disciplinary")
-                return ["discipline", "admin"].includes(portalRole);
               if (n === "Portal Management") return portalRole === "admin";
-              return true;
+              if (n === "Dashboard") return true;
+              if (portalRole === "admin") return true;
+              if (n === "Operations" && portalRole === "operations") return true;
+              if (n === "Absence Review" && portalRole === "operations") return true;
+              if (n === "Disciplinary" && portalRole === "discipline") return true;
+              return accessPermissions.includes(pagePermissions[n]);
             })
             .map(([n, I]) => (
             <button
@@ -419,6 +446,7 @@ function PortalApp({ session }) {
             userId={session.user.id}
             rpName={rpName}
             crewMembers={crewMembers}
+            portalRole={portalRole}
           />
         )}
       </main>
@@ -724,6 +752,8 @@ function Page(p) {
           roles={p.roles}
           setRoles={p.setRoles}
           notify={p.notify}
+          userId={p.userId}
+          crewMembers={p.crewMembers}
         />
       )}
     </div>
@@ -1530,8 +1560,9 @@ function Disciplinary({ items, setItems, notify, userId, crewMembers }) {
     </div>
   );
 }
-function PortalManagement({ roles, setRoles, notify }) {
-  const perms = ["Schedule flights", "Manage discipline", "Manage portal"];
+function PortalManagement({ roles, setRoles, notify, userId, crewMembers }) {
+  const [newRoleName, setNewRoleName] = useState("");
+  const [saving, setSaving] = useState(false);
   const toggle = (index, p) =>
     setRoles(
       roles.map((r, i) =>
@@ -1545,6 +1576,49 @@ function PortalManagement({ roles, setRoles, notify }) {
           : r,
       ),
     );
+  const createRole = async (event) => {
+    event.preventDefault();
+    const name = newRoleName.trim();
+    if (name.length < 2) return notify("Enter a role name");
+    const { data, error } = await supabase
+      .from("portal_roles")
+      .insert({ name, permissions: [], created_by: userId })
+      .select()
+      .single();
+    if (error) return notify(error.message);
+    setRoles([...roles, { ...data, members: 0 }].sort((a, b) => a.name.localeCompare(b.name)));
+    setNewRoleName("");
+    notify(`${name} created`);
+  };
+  const saveRoles = async () => {
+    setSaving(true);
+    const results = await Promise.all(
+      roles.map((role) =>
+        supabase
+          .from("portal_roles")
+          .update({ name: role.name.trim(), permissions: role.permissions })
+          .eq("id", role.id),
+      ),
+    );
+    setSaving(false);
+    const failure = results.find((result) => result.error);
+    notify(failure ? failure.error.message : "Role permissions saved");
+  };
+  const removeRole = async (role) => {
+    const { error } = await supabase.from("portal_roles").delete().eq("id", role.id);
+    if (error) return notify(error.message);
+    setRoles(roles.filter((item) => item.id !== role.id));
+    notify(`${role.name} removed`);
+  };
+  const assignRole = async (memberId, roleId) => {
+    const nextRoleId = roleId ? Number(roleId) : null;
+    const { error } = await supabase.rpc("assign_portal_role", {
+      target_user: memberId,
+      new_role_id: nextRoleId,
+    });
+    if (error) return notify(error.message);
+    notify("Member role updated");
+  };
   return (
     <div className="roles">
       <div className="manager-toolbar panel">
@@ -1557,24 +1631,55 @@ function PortalManagement({ roles, setRoles, notify }) {
         </div>
         <button
           className="primary"
-          onClick={() => notify("Role configuration saved")}
+          onClick={saveRoles}
+          disabled={saving}
         >
-          <Save /> Save changes
+          <Save /> {saving ? "Saving…" : "Save changes"}
         </button>
       </div>
+      <form className="panel role-create" onSubmit={createRole}>
+        <div>
+          <strong>Create portal role</strong>
+          <span>Add a role, then choose exactly what it can access.</span>
+        </div>
+        <input
+          value={newRoleName}
+          onChange={(event) => setNewRoleName(event.target.value)}
+          placeholder="Role name"
+          maxLength={50}
+          required
+        />
+        <button className="primary" type="submit"><Plus /> Create role</button>
+      </form>
       {roles.map((role, index) => (
-        <section className="panel role" key={role.name}>
+        <section className="panel role" key={role.id}>
           <div className="role-head">
             <div>
-              <h3>{role.name}</h3>
+              <input
+                className="role-name-input"
+                value={role.name}
+                maxLength={50}
+                onChange={(event) =>
+                  setRoles(
+                    roles.map((item, roleIndex) =>
+                      roleIndex === index ? { ...item, name: event.target.value } : item,
+                    ),
+                  )
+                }
+              />
               <span>
                 {role.members} member{role.members === 1 ? "" : "s"}
               </span>
             </div>
-            <Chip>{index === 0 ? "ADMIN" : "ROLE"}</Chip>
+            <div className="role-actions">
+              <Chip>PORTAL ROLE</Chip>
+              <button className="icon-btn danger" aria-label={`Delete ${role.name}`} onClick={() => removeRole(role)}>
+                <Trash2 />
+              </button>
+            </div>
           </div>
           <div className="permission-grid">
-            {perms.map((p) => (
+            {portalPermissions.map((p) => (
               <label key={p}>
                 <span>
                   <strong>{p}</strong>
@@ -1583,7 +1688,7 @@ function PortalManagement({ roles, setRoles, notify }) {
                       ? "Create, edit and remove flight operations."
                       : p === "Manage discipline"
                         ? "Issue and remove disciplinary actions."
-                        : "Change roles and portal permissions."}
+                        : `Allow this role to ${p.toLowerCase()}.`}
                   </small>
                 </span>
                 <input
@@ -1597,6 +1702,23 @@ function PortalManagement({ roles, setRoles, notify }) {
           </div>
         </section>
       ))}
+      <section className="panel role-assignments">
+        <div className="section-title">
+          <div><p>ACCESS</p><h3>Assign member roles</h3></div>
+          <Chip>{crewMembers.length} MEMBERS</Chip>
+        </div>
+        <div className="assignment-list">
+          {crewMembers.map((member) => (
+            <label key={member.id}>
+              <span><strong>{member.rp_name}</strong><small>{member.rank_name || member.discord_username || "Crew member"}</small></span>
+              <select defaultValue={member.portal_role_id || ""} onChange={(event) => assignRole(member.id, event.target.value)}>
+                <option value="">No portal role</option>
+                {roles.map((role) => <option key={role.id} value={role.id}>{role.name}</option>)}
+              </select>
+            </label>
+          ))}
+        </div>
+      </section>
     </div>
   );
 }
