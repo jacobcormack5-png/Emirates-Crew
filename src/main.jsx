@@ -207,7 +207,8 @@ function PortalApp({ session }) {
     [profileOpen, setProfileOpen] = useState(false),
     [rpName, setRpName] = useState("Jakele7"),
     [discordId, setDiscordId] = useState(""),
-    [discordRoles, setDiscordRoles] = useState([]);
+    [discordRoles, setDiscordRoles] = useState([]),
+    [crewMembers, setCrewMembers] = useState([]);
   const notify = (m) => {
     setToast(m);
     setTimeout(() => setToast(""), 2400);
@@ -219,6 +220,7 @@ function PortalApp({ session }) {
         { data: flightRows },
         { data: recordRows },
         { data: loaRows },
+        { data: profileRows },
       ] = await Promise.all([
         supabase
           .from("crew_profiles")
@@ -240,6 +242,10 @@ function PortalApp({ session }) {
           .select("id,status")
           .eq("user_id", session.user.id)
           .eq("status", "pending"),
+        supabase
+          .from("crew_profiles")
+          .select("id,rp_name,rank_name,discord_username")
+          .order("rp_name"),
       ]);
       if (profile) {
         setRpName(profile.rp_name);
@@ -279,6 +285,7 @@ function PortalApp({ session }) {
         })),
       );
       setAbsence(Boolean(loaRows?.length));
+      setCrewMembers(profileRows || []);
     };
     load().catch(() => notify("Could not load your Supabase crew record"));
   }, [session.user.id]);
@@ -364,6 +371,7 @@ function PortalApp({ session }) {
             discordId={discordId}
             notify={notify}
             userId={session.user.id}
+            crewMembers={crewMembers}
           />
         )}
       </main>
@@ -639,9 +647,9 @@ function Page(p) {
         <Disciplinary
           items={p.discipline}
           setItems={p.setDiscipline}
-          discordId={p.discordId}
           notify={p.notify}
           userId={p.userId}
+          crewMembers={p.crewMembers}
         />
       )}{" "}
       {p.name === "Portal Management" && (
@@ -1058,25 +1066,29 @@ function Operations({ flights, setFlights, balance, setBalance, notify }) {
     </div>
   );
 }
-function Disciplinary({ items, setItems, discordId, notify, userId }) {
+function Disciplinary({ items, setItems, notify, userId, crewMembers }) {
   const [type, setType] = useState("Warning"),
-    [reason, setReason] = useState("");
+    [reason, setReason] = useState(""),
+    [selectedUserId, setSelectedUserId] = useState(userId);
   const issue = async (e) => {
     e.preventDefault();
     if (!reason.trim()) return notify("Add a reason before issuing");
-    if (!discordId) return notify("Add the member Discord ID in Profile first");
+    if (!selectedUserId) return notify("Choose a crew member");
+    const selectedMember = crewMembers.find(
+      (member) => member.id === selectedUserId,
+    );
     const record = {
       id: Date.now(),
       type,
       reason,
       date: new Date().toLocaleDateString("en-GB"),
-      issuer: "Jakele7",
+      issuer: "Emirates Management",
     };
     try {
       const { data, error } = await supabase
         .from("disciplinary_actions")
         .insert({
-          user_id: userId,
+          user_id: selectedUserId,
           issued_by: userId,
           action_type: type.toLowerCase(),
           reason: reason.trim(),
@@ -1093,7 +1105,9 @@ function Disciplinary({ items, setItems, discordId, notify, userId }) {
         },
       ]);
       setReason("");
-      notify(`${type} issued and queued for the discipline channel`);
+      notify(
+        `${type} issued to ${selectedMember?.rp_name || "crew member"} and queued for Discord`,
+      );
     } catch (error) {
       notify(error.message || "Could not reach the Emirates bot");
     }
@@ -1110,7 +1124,16 @@ function Disciplinary({ items, setItems, discordId, notify, userId }) {
         </div>
         <label className="field">
           <span>Crew member</span>
-          <input value="Jakele7" readOnly />
+          <select
+            value={selectedUserId}
+            onChange={(e) => setSelectedUserId(e.target.value)}
+          >
+            {crewMembers.map((member) => (
+              <option key={member.id} value={member.id}>
+                {member.rp_name} — {member.rank_name}
+              </option>
+            ))}
+          </select>
         </label>
         <label className="field">
           <span>Action</span>
