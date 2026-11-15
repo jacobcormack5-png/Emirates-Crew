@@ -371,6 +371,7 @@ function PortalApp({ session }) {
             discordId={discordId}
             notify={notify}
             userId={session.user.id}
+            rpName={rpName}
             crewMembers={crewMembers}
           />
         )}
@@ -615,6 +616,8 @@ function Page(p) {
           flights={p.flights}
           setFlights={p.setFlights}
           notify={p.notify}
+          userId={p.userId}
+          rpName={p.rpName}
         />
       )}{" "}
       {p.name === "Absence" && (
@@ -641,6 +644,7 @@ function Page(p) {
           balance={p.balance}
           setBalance={p.setBalance}
           notify={p.notify}
+          userId={p.userId}
         />
       )}{" "}
       {p.name === "Disciplinary" && (
@@ -662,7 +666,7 @@ function Page(p) {
     </div>
   );
 }
-function Allocations({ flights, setFlights, notify }) {
+function Allocations({ flights, setFlights, notify, userId, rpName }) {
   const [query, setQuery] = useState(""),
     [open, setOpen] = useState(null);
   const shown = flights.filter((f) =>
@@ -670,9 +674,9 @@ function Allocations({ flights, setFlights, notify }) {
       .toLowerCase()
       .includes(query.toLowerCase()),
   );
-  const take = (flight, role, slot) => {
+  const take = async (flight, role, slot) => {
     const current = Object.entries(flight.assignments || {}).find(
-      ([, name]) => name === "Jakele7",
+      ([, name]) => name === rpName,
     );
     const key = `${role}:${slot}`;
     if (current && current[0] !== key)
@@ -680,11 +684,28 @@ function Allocations({ flights, setFlights, notify }) {
         `Leave ${current[0].split(":")[0]} before choosing another role`,
       );
     const assignments = { ...(flight.assignments || {}) };
-    if (assignments[key] === "Jakele7") {
+    if (assignments[key] === rpName) {
+      const { error } = await supabase
+        .from("flight_allocations")
+        .delete()
+        .eq("flight_id", flight.id)
+        .eq("user_id", userId);
+      if (error) return notify(error.message);
       delete assignments[key];
       notify(`Left ${role}`);
     } else {
-      assignments[key] = "Jakele7";
+      const dutyGroup = dutyGroups.find((group) =>
+        group.roles.some(([name]) => name === role),
+      )?.title;
+      const { error } = await supabase.from("flight_allocations").insert({
+        flight_id: flight.id,
+        user_id: userId,
+        duty_group: dutyGroup,
+        duty_role: role,
+        slot_number: slot + 1,
+      });
+      if (error) return notify(error.message);
+      assignments[key] = rpName;
       notify(`Joined ${role}`);
     }
     setFlights(
@@ -766,7 +787,7 @@ function Allocations({ flights, setFlights, notify }) {
                                     className={occupant ? "occupied" : ""}
                                     onClick={() => take(f, role, i)}
                                     disabled={
-                                      !!occupant && occupant !== "Jakele7"
+                                      !!occupant && occupant !== rpName
                                     }
                                   >
                                     {occupant || "Open position"}
@@ -952,7 +973,7 @@ function Documents({ notify }) {
     </>
   );
 }
-function Operations({ flights, setFlights, balance, setBalance, notify }) {
+function Operations({ flights, setFlights, balance, setBalance, notify, userId }) {
   const [form, setForm] = useState({
     code: "",
     origin: "Dubai",
@@ -962,19 +983,41 @@ function Operations({ flights, setFlights, balance, setBalance, notify }) {
     aircraft: "A350-900",
   });
   const change = (e) => setForm({ ...form, [e.target.name]: e.target.value });
-  const submit = (e) => {
+  const submit = async (e) => {
     e.preventDefault();
     if (!form.code || !form.destination || !form.date || !form.time)
       return notify("Complete all required flight details");
-    setFlights([
-      ...flights,
-      { ...form, id: Date.now(), status: "Scheduled", assignments: {} },
-    ]);
+    const departureAt = new Date(`${form.date}T${form.time}`).toISOString();
+    const { data, error } = await supabase
+      .from("flights")
+      .insert({
+        code: form.code.trim(),
+        origin: form.origin.trim(),
+        destination: form.destination.trim(),
+        departure_at: departureAt,
+        aircraft: form.aircraft,
+        created_by: userId,
+      })
+      .select("id,code,origin,destination,departure_at,aircraft")
+      .single();
+    if (error) return notify(error.message);
+    setFlights([...flights, {
+      id: data.id,
+      code: data.code,
+      origin: data.origin,
+      destination: data.destination,
+      date: new Date(data.departure_at).toLocaleDateString("en-GB"),
+      time: new Date(data.departure_at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }),
+      aircraft: data.aircraft,
+      assignments: {},
+    }]);
     setForm({ ...form, code: "", destination: "", date: "", time: "" });
     notify("Flight scheduled successfully");
   };
-  const end = (f) => {
+  const end = async (f) => {
     const attended = Object.values(f.assignments || {}).includes("Jakele7");
+    const { error } = await supabase.from("flights").delete().eq("id", f.id);
+    if (error) return notify(error.message);
     setFlights(flights.filter((x) => x.id !== f.id));
     if (attended) setBalance(balance + 20);
     notify(
@@ -1167,8 +1210,15 @@ function Disciplinary({ items, setItems, notify, userId, crewMembers }) {
             title={x.type}
             sub={`${x.reason} · ${x.date}`}
             onDelete={() => {
-              setItems(items.filter((i) => i.id !== x.id));
-              notify("Disciplinary action removed");
+              void (async () => {
+                const { error } = await supabase
+                  .from("disciplinary_actions")
+                  .delete()
+                  .eq("id", x.id);
+                if (error) return notify(error.message);
+                setItems(items.filter((i) => i.id !== x.id));
+                notify("Disciplinary action removed and user notified");
+              })();
             }}
           />
         ))}
