@@ -282,6 +282,7 @@ aside {
   padding: 36px 22px;
   display: flex;
   flex-direction: column;
+  color: #fff;
 }
 .logo {
   display: flex;
@@ -350,6 +351,13 @@ nav button.active {
   background: #fff;
   color: #9d0013;
   box-shadow: 0 6px 25px #5f001344;
+}
+.app[data-theme="light"] aside,
+.app[data-theme="light"] aside .logo,
+.app[data-theme="light"] aside nav button:not(.active),
+.app[data-theme="light"] aside .logout-button,
+.app[data-theme="light"] aside .icon-btn {
+  color: #fff;
 }
 nav svg {
   width: 19px;
