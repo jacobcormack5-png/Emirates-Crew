@@ -83,13 +83,8 @@ function App() {
     }
     const finishSignIn = (nextSession) => {
       setSession(nextSession);
-      if (
-        nextSession &&
-        (window.location.search ||
-          window.location.hash ||
-          window.location.pathname !== "/")
-      ) {
-        window.history.replaceState({}, document.title, "/");
+      if (nextSession && window.location.pathname !== "/dashboard") {
+        window.history.replaceState({}, document.title, "/dashboard");
       }
     };
     supabase.auth.getSession().then(({ data }) => finishSignIn(data.session));
@@ -122,7 +117,7 @@ function Landing() {
     setBusy(true);
     const { error: authError } = await supabase.auth.signInWithOAuth({
       provider: "discord",
-      options: { redirectTo: window.location.origin },
+      options: { redirectTo: `${window.location.origin}/auth/callback` },
     });
     if (authError) {
       setError(authError.message);
