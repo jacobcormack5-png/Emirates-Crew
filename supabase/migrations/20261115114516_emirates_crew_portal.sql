@@ -139,6 +139,9 @@ create trigger loa_submitted_bot_event after insert on public.loa_requests for e
 create trigger loa_reviewed_bot_event after update of status on public.loa_requests for each row
   when (old.status = 'pending' and new.status in ('approved','denied')) execute function public.queue_portal_event();
 
+revoke all on function public.handle_new_crew_user() from public, anon, authenticated;
+revoke all on function public.queue_portal_event() from public, anon, authenticated;
+
 alter table public.crew_profiles enable row level security;
 alter table public.flights enable row level security;
 alter table public.flight_allocations enable row level security;
