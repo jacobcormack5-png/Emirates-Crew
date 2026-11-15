@@ -81,12 +81,25 @@ function App() {
       setSession(null);
       return;
     }
-    supabase.auth.getSession().then(({ data }) => setSession(data.session));
+    const finishSignIn = (nextSession) => {
+      setSession(nextSession);
+      if (
+        nextSession &&
+        (window.location.search ||
+          window.location.hash ||
+          window.location.pathname !== "/")
+      ) {
+        window.history.replaceState({}, document.title, "/");
+      }
+    };
+    supabase.auth.getSession().then(({ data }) => finishSignIn(data.session));
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, nextSession) =>
-      setSession(nextSession),
-    );
+    } = supabase.auth.onAuthStateChange((event, nextSession) => {
+      finishSignIn(nextSession);
+      if (event === "SIGNED_IN")
+        window.scrollTo({ top: 0, behavior: "instant" });
+    });
     return () => subscription.unsubscribe();
   }, []);
 
