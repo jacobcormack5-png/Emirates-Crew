@@ -75,6 +75,7 @@ const dutyGroups = [
 ];
 function App() {
   const [session, setSession] = useState(undefined);
+  const [authError, setAuthError] = useState("");
 
   useEffect(() => {
     if (!supabaseConfigured) {
@@ -96,12 +97,6 @@ function App() {
         window.scrollTo({ top: 0, behavior: "instant" });
     });
     const restoreSession = async () => {
-      const { data: current } = await supabase.auth.getSession();
-      if (current.session) {
-        restoring = false;
-        return finishSignIn(current.session);
-      }
-
       const code = new URLSearchParams(window.location.search).get("code");
       if (window.location.pathname === "/auth/callback" && code) {
         const { data, error } =
@@ -111,6 +106,18 @@ function App() {
           return finishSignIn(data.session);
         }
         console.error("Discord sign-in callback failed", error);
+        restoring = false;
+        setSession(null);
+        setAuthError(
+          error?.message || "Discord returned without a usable session.",
+        );
+        return;
+      }
+
+      const { data: current } = await supabase.auth.getSession();
+      if (current.session) {
+        restoring = false;
+        return finishSignIn(current.session);
       }
       restoring = false;
       finishSignIn(null);
@@ -121,6 +128,14 @@ function App() {
 
   if (session === undefined)
     return <div className="auth-loading">Loading Emirates Crew…</div>;
+  if (authError)
+    return (
+      <div className="auth-loading callback-error">
+        <strong>Discord sign-in could not be completed.</strong>
+        <span>{authError}</span>
+        <a href="/">Return to sign in</a>
+      </div>
+    );
   if (!session) return <Landing />;
   return <PortalApp session={session} />;
 }
