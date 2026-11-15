@@ -2,7 +2,9 @@ create table public.portal_roles (
   id bigint generated always as identity primary key,
   name text not null unique check (length(trim(name)) between 2 and 50),
   permissions text[] not null default '{}',
-  created_by uuid not null references public.crew_profiles(id),
+  created_by uuid references public.crew_profiles(id),
+  source text not null default 'manual' check (source in ('manual','discord')),
+  discord_role_id text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   constraint portal_roles_permissions_valid check (
@@ -23,6 +25,7 @@ alter table public.crew_profiles
   add column portal_role_id bigint references public.portal_roles(id) on delete set null;
 
 create index crew_profiles_portal_role_id_idx on public.crew_profiles(portal_role_id);
+create unique index portal_roles_discord_role_id_idx on public.portal_roles(discord_role_id) where discord_role_id is not null;
 
 alter table public.portal_roles enable row level security;
 

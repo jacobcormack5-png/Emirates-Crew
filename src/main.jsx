@@ -293,6 +293,7 @@ function PortalApp({ session }) {
         if (memberId) {
           const response = await fetch(
             `/api/roles?discordId=${encodeURIComponent(memberId)}`,
+            { headers: { authorization: `Bearer ${session.access_token}` } },
           ).catch(() => null);
           if (response?.ok) {
             const roleData = await response.json();
@@ -334,8 +335,12 @@ function PortalApp({ session }) {
       );
       setAbsence(Boolean(loaRows?.length));
       setCrewMembers(profileRows || []);
+      const { data: refreshedPortalRoleRows } = await supabase
+        .from("portal_roles")
+        .select("*")
+        .order("name");
       setRoles(
-        (portalRoleRows || []).map((role) => ({
+        (refreshedPortalRoleRows || portalRoleRows || []).map((role) => ({
           ...role,
           members: (profileRows || []).filter(
             (member) => member.portal_role_id === role.id,
@@ -460,6 +465,9 @@ function PortalApp({ session }) {
           setDiscordId={setDiscordId}
           roles={discordRoles}
           setRoles={setDiscordRoles}
+          setPortalRoles={setRoles}
+          crewMembers={crewMembers}
+          accessToken={session.access_token}
           close={() => setProfileOpen(false)}
           notify={notify}
           userId={session.user.id}
@@ -1672,7 +1680,7 @@ function PortalManagement({ roles, setRoles, notify, userId, crewMembers }) {
               </span>
             </div>
             <div className="role-actions">
-              <Chip>PORTAL ROLE</Chip>
+              <Chip>{role.source === "discord" ? "DISCORD SYNCED" : "PORTAL ROLE"}</Chip>
               <button className="icon-btn danger" aria-label={`Delete ${role.name}`} onClick={() => removeRole(role)}>
                 <Trash2 />
               </button>
@@ -1772,6 +1780,9 @@ function ProfileModal({
   setDiscordId,
   roles,
   setRoles,
+  setPortalRoles,
+  crewMembers,
+  accessToken,
   close,
   notify,
   userId,
@@ -1785,13 +1796,27 @@ function ProfileModal({
     try {
       const response = await fetch(
         `/api/roles?discordId=${encodeURIComponent(memberId.trim())}`,
+        { headers: { authorization: `Bearer ${accessToken}` } },
       );
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Role refresh failed");
       setRoles(data.roles || []);
       setRankName(data.primaryRole || "Crew Member");
       setDiscordId(memberId.trim());
-      notify("Discord roles refreshed");
+      const { data: syncedPortalRoles } = await supabase
+        .from("portal_roles")
+        .select("*")
+        .order("name");
+      if (syncedPortalRoles)
+        setPortalRoles(
+          syncedPortalRoles.map((role) => ({
+            ...role,
+            members: crewMembers.filter(
+              (member) => member.portal_role_id === role.id,
+            ).length,
+          })),
+        );
+      notify("Discord roles refreshed and synced to Portal Management");
     } catch (error) {
       notify(error.message || "Could not reach the Emirates bot");
     } finally {
