@@ -84,11 +84,14 @@ function App() {
     supabase.auth.getSession().then(({ data }) => setSession(data.session));
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, nextSession) => setSession(nextSession));
+    } = supabase.auth.onAuthStateChange((_event, nextSession) =>
+      setSession(nextSession),
+    );
     return () => subscription.unsubscribe();
   }, []);
 
-  if (session === undefined) return <div className="auth-loading">Loading Emirates Crew…</div>;
+  if (session === undefined)
+    return <div className="auth-loading">Loading Emirates Crew…</div>;
   if (!session) return <Landing />;
   return <PortalApp session={session} />;
 }
@@ -98,13 +101,15 @@ function Landing() {
   const [error, setError] = useState("");
   const signIn = async () => {
     if (!supabaseConfigured) {
-      setError("The Emirates Supabase project has not been connected to this deployment yet.");
+      setError(
+        "The Emirates Supabase project has not been connected to this deployment yet.",
+      );
       return;
     }
     setBusy(true);
     const { error: authError } = await supabase.auth.signInWithOAuth({
       provider: "discord",
-      options: {redirectTo: window.location.origin},
+      options: { redirectTo: window.location.origin },
     });
     if (authError) {
       setError(authError.message);
@@ -114,18 +119,34 @@ function Landing() {
   return (
     <main className="landing">
       <div className="landing-glow" />
-      <header className="landing-nav"><Logo /><span>Personnel Operations</span></header>
+      <header className="landing-nav">
+        <Logo />
+        <span>Personnel Operations</span>
+      </header>
       <section className="landing-copy">
         <p>EMIRATES CREW PORTAL</p>
-        <h1>Your roster.<br />Your operations.<br /><em>One place.</em></h1>
-        <span>Sign in securely with Discord to view allocations, request leave and manage your Emirates Virtual crew profile.</span>
+        <h1>
+          Your roster.
+          <br />
+          Your operations.
+          <br />
+          <em>One place.</em>
+        </h1>
+        <span>
+          Sign in securely with Discord to view allocations, request leave and
+          manage your Emirates Virtual crew profile.
+        </span>
         <button className="discord-button" onClick={signIn} disabled={busy}>
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.5 5.3A16 16 0 0 0 15.4 4l-.5 1a14 14 0 0 0-5.8 0l-.5-1a16 16 0 0 0-4.1 1.3C1.9 9.2 1.2 13 1.5 16.8A16.5 16.5 0 0 0 6.6 19l1.2-1.7-1.8-.9.4-.3c3.6 1.7 7.6 1.7 11.2 0l.4.3-1.8.9 1.2 1.7a16.5 16.5 0 0 0 5.1-2.2c.4-4.4-.8-8.2-3-11.5ZM8.7 14.6c-1.1 0-2-1-2-2.2s.9-2.2 2-2.2 2 1 2 2.2-.9 2.2-2 2.2Zm6.6 0c-1.1 0-2-1-2-2.2s.9-2.2 2-2.2 2 1 2 2.2-.9 2.2-2 2.2Z"/></svg>
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M19.5 5.3A16 16 0 0 0 15.4 4l-.5 1a14 14 0 0 0-5.8 0l-.5-1a16 16 0 0 0-4.1 1.3C1.9 9.2 1.2 13 1.5 16.8A16.5 16.5 0 0 0 6.6 19l1.2-1.7-1.8-.9.4-.3c3.6 1.7 7.6 1.7 11.2 0l.4.3-1.8.9 1.2 1.7a16.5 16.5 0 0 0 5.1-2.2c.4-4.4-.8-8.2-3-11.5ZM8.7 14.6c-1.1 0-2-1-2-2.2s.9-2.2 2-2.2 2 1 2 2.2-.9 2.2-2 2.2Zm6.6 0c-1.1 0-2-1-2-2.2s.9-2.2 2-2.2 2 1 2 2.2-.9 2.2-2 2.2Z" />
+          </svg>
           {busy ? "Redirecting…" : "Sign in with Discord"}
         </button>
         {error && <div className="auth-error">{error}</div>}
       </section>
-      <div className="landing-plane"><img src="/emirates-a350.jpg" alt="Emirates aircraft" /></div>
+      <div className="landing-plane">
+        <img src="/emirates-a350.jpg" alt="Emirates aircraft" />
+      </div>
     </main>
   );
 }
@@ -149,11 +170,32 @@ function PortalApp({ session }) {
   };
   useEffect(() => {
     const load = async () => {
-      const [{ data: profile }, { data: flightRows }, { data: recordRows }, { data: loaRows }] = await Promise.all([
-        supabase.from("crew_profiles").select("*").eq("id", session.user.id).single(),
-        supabase.from("flights").select("*, flight_allocations(*)").in("status", ["scheduled", "boarding"]).order("departure_at"),
-        supabase.from("disciplinary_actions").select("*").eq("user_id", session.user.id).order("created_at", {ascending: false}),
-        supabase.from("loa_requests").select("id,status").eq("user_id", session.user.id).eq("status", "pending"),
+      const [
+        { data: profile },
+        { data: flightRows },
+        { data: recordRows },
+        { data: loaRows },
+      ] = await Promise.all([
+        supabase
+          .from("crew_profiles")
+          .select("*")
+          .eq("id", session.user.id)
+          .single(),
+        supabase
+          .from("flights")
+          .select("*, flight_allocations(*)")
+          .in("status", ["scheduled", "boarding"])
+          .order("departure_at"),
+        supabase
+          .from("disciplinary_actions")
+          .select("*")
+          .eq("user_id", session.user.id)
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("loa_requests")
+          .select("id,status")
+          .eq("user_id", session.user.id)
+          .eq("status", "pending"),
       ]);
       if (profile) {
         setRpName(profile.rp_name);
@@ -161,17 +203,37 @@ function PortalApp({ session }) {
         setDiscordRoles(profile.discord_roles || []);
         setBalance(profile.total_pay || 0);
       }
-      setFlights((flightRows || []).map((flight) => ({
-        id: flight.id,
-        code: flight.code,
-        origin: flight.origin,
-        destination: flight.destination,
-        date: new Date(flight.departure_at).toLocaleDateString("en-GB"),
-        time: new Date(flight.departure_at).toLocaleTimeString("en-GB", {hour: "2-digit", minute: "2-digit"}),
-        aircraft: flight.aircraft,
-        assignments: Object.fromEntries((flight.flight_allocations || []).map((a) => [`${a.duty_role}:${a.slot_number - 1}`, a.user_id === session.user.id ? profile?.rp_name || "You" : "Crew member"])),
-      })));
-      setDiscipline((recordRows || []).map((item) => ({id: item.id, type: item.action_type[0].toUpperCase() + item.action_type.slice(1), reason: item.reason, date: new Date(item.created_at).toLocaleDateString("en-GB"), issuer: "Emirates Management"})));
+      setFlights(
+        (flightRows || []).map((flight) => ({
+          id: flight.id,
+          code: flight.code,
+          origin: flight.origin,
+          destination: flight.destination,
+          date: new Date(flight.departure_at).toLocaleDateString("en-GB"),
+          time: new Date(flight.departure_at).toLocaleTimeString("en-GB", {
+            hour: "2-digit",
+            minute: "2-digit",
+          }),
+          aircraft: flight.aircraft,
+          assignments: Object.fromEntries(
+            (flight.flight_allocations || []).map((a) => [
+              `${a.duty_role}:${a.slot_number - 1}`,
+              a.user_id === session.user.id
+                ? profile?.rp_name || "You"
+                : "Crew member",
+            ]),
+          ),
+        })),
+      );
+      setDiscipline(
+        (recordRows || []).map((item) => ({
+          id: item.id,
+          type: item.action_type[0].toUpperCase() + item.action_type.slice(1),
+          reason: item.reason,
+          date: new Date(item.created_at).toLocaleDateString("en-GB"),
+          issuer: "Emirates Management",
+        })),
+      );
       setAbsence(Boolean(loaRows?.length));
     };
     load().catch(() => notify("Could not load your Supabase crew record"));
@@ -508,6 +570,7 @@ function Page(p) {
           active={p.absence}
           setActive={p.setAbsence}
           notify={p.notify}
+          userId={p.userId}
         />
       )}{" "}
       {p.name === "Records" && <Records items={p.discipline} />}{" "}
@@ -534,6 +597,7 @@ function Page(p) {
           setItems={p.setDiscipline}
           discordId={p.discordId}
           notify={p.notify}
+          userId={p.userId}
         />
       )}{" "}
       {p.name === "Portal Management" && (
@@ -678,10 +742,32 @@ function Allocations({ flights, setFlights, notify }) {
     </>
   );
 }
-function Absence({ active, setActive, notify }) {
+function Absence({ active, setActive, notify, userId }) {
+  const [form, setForm] = useState({ starts_on: "", ends_on: "", reason: "" });
+  const submit = async (event) => {
+    event.preventDefault();
+    if (!form.starts_on || !form.ends_on || !form.reason.trim())
+      return notify("Complete the LOA dates and reason");
+    const { error } = await supabase
+      .from("loa_requests")
+      .insert({ ...form, reason: form.reason.trim(), user_id: userId });
+    if (error) return notify(error.message);
+    setActive(true);
+    notify("LOA submitted and queued for the Emirates bot");
+  };
+  const withdraw = async () => {
+    const { error } = await supabase
+      .from("loa_requests")
+      .update({ status: "withdrawn" })
+      .eq("user_id", userId)
+      .eq("status", "pending");
+    if (error) return notify(error.message);
+    setActive(false);
+    notify("LOA request withdrawn");
+  };
   return (
     <div className="split">
-      <section className="panel empty">
+      <form className="panel admin-form" onSubmit={submit}>
         <div className="empty-icon">
           <Palmtree />
         </div>
@@ -691,16 +777,38 @@ function Absence({ active, setActive, notify }) {
             ? "Your request is awaiting review."
             : "Your absence and leave requests will appear here."}
         </p>
+        {!active && (
+          <>
+            <div className="form-row">
+              <Field
+                label="Start date"
+                type="date"
+                value={form.starts_on}
+                onChange={(e) =>
+                  setForm({ ...form, starts_on: e.target.value })
+                }
+              />
+              <Field
+                label="End date"
+                type="date"
+                value={form.ends_on}
+                onChange={(e) => setForm({ ...form, ends_on: e.target.value })}
+              />
+            </div>
+            <label className="field">
+              <span>Reason</span>
+              <textarea
+                value={form.reason}
+                onChange={(e) => setForm({ ...form, reason: e.target.value })}
+                placeholder="Tell management why you need leave"
+              />
+            </label>
+          </>
+        )}
         <button
           className="primary"
-          onClick={() => {
-            setActive(!active);
-            notify(
-              active
-                ? "Absence request withdrawn"
-                : "Absence request submitted",
-            );
-          }}
+          type={active ? "button" : "submit"}
+          onClick={active ? withdraw : undefined}
         >
           {active ? (
             <>
@@ -712,7 +820,7 @@ function Absence({ active, setActive, notify }) {
             </>
           )}
         </button>
-      </section>
+      </form>
       <section className="panel allowance">
         <p className="eyebrow">LEAVE ALLOWANCE</p>
         <h3>Not yet available</h3>
@@ -906,7 +1014,7 @@ function Operations({ flights, setFlights, balance, setBalance, notify }) {
     </div>
   );
 }
-function Disciplinary({ items, setItems, discordId, notify }) {
+function Disciplinary({ items, setItems, discordId, notify, userId }) {
   const [type, setType] = useState("Warning"),
     [reason, setReason] = useState("");
   const issue = async (e) => {
@@ -921,23 +1029,27 @@ function Disciplinary({ items, setItems, discordId, notify }) {
       issuer: "Jakele7",
     };
     try {
-      const response = await fetch("/api/discipline", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          targetId: discordId,
-          moderatorName: "Jakele7",
-          type,
-          reason,
-        }),
-      });
-      if (!response.ok)
-        throw new Error(
-          (await response.json().catch(() => ({}))).error || "Bot sync failed",
-        );
-      setItems([...items, record]);
+      const { data, error } = await supabase
+        .from("disciplinary_actions")
+        .insert({
+          user_id: userId,
+          issued_by: userId,
+          action_type: type.toLowerCase(),
+          reason: reason.trim(),
+        })
+        .select("id,created_at")
+        .single();
+      if (error) throw error;
+      setItems([
+        ...items,
+        {
+          ...record,
+          id: data.id,
+          date: new Date(data.created_at).toLocaleDateString("en-GB"),
+        },
+      ]);
       setReason("");
-      notify(`${type} issued and sent to the discipline channel`);
+      notify(`${type} issued and queued for the discipline channel`);
     } catch (error) {
       notify(error.message || "Could not reach the Emirates bot");
     }
@@ -1142,7 +1254,10 @@ function ProfileModal({
   };
   const save = async () => {
     if (!draft.trim()) return notify("RP name cannot be empty");
-    const { error } = await supabase.from("crew_profiles").update({rp_name: draft.trim()}).eq("id", userId);
+    const { error } = await supabase
+      .from("crew_profiles")
+      .update({ rp_name: draft.trim() })
+      .eq("id", userId);
     if (error) return notify(error.message);
     setRpName(draft.trim());
     notify("Profile saved to Supabase");
