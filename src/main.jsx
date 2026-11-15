@@ -29,6 +29,7 @@ import {
   CheckCircle2,
   XCircle,
   Clock3,
+  LogOut,
 } from "lucide-react";
 import "./styles.css";
 import { supabase, supabaseConfigured } from "./supabase";
@@ -219,6 +220,11 @@ function PortalApp({ session }) {
     setToast(m);
     setTimeout(() => setToast(""), 2400);
   };
+  const signOut = async () => {
+    const { error } = await supabase.auth.signOut();
+    if (error) return notify(error.message);
+    window.history.replaceState({}, document.title, "/");
+  };
   useEffect(() => {
     const load = async () => {
       const [
@@ -331,8 +337,14 @@ function PortalApp({ session }) {
             ))}
         </nav>
         <div className="side-bottom">
-          <div className="status-dot" />
-          <span>Operations online</span>
+          <div className="side-status">
+            <div className="status-dot" />
+            <span>Operations online</span>
+          </div>
+          <button className="logout-button" onClick={signOut}>
+            <LogOut />
+            <span>Log out</span>
+          </button>
         </div>
       </aside>
       <main>
